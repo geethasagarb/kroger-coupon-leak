@@ -1,11 +1,13 @@
 # Kroger Coupon Savings Leak
 
-**How much digital-coupon savings do grocery shoppers lose, where, and what fixes it?**
+
 A retail product and marketing analytics case study. App events for 8,000 shoppers (997k events) were simulated in Python and loaded into Amplitude, and 1,999 real Google Play reviews of the Kroger app were pulled with Amplitude AI Feedback.
-The first analysis was built in Amplitude (funnels, retention, segments, dashboards). The work then moved to Hex and Claude for the in-depth analysis: sizing the leak in dollars, a matched retention comparison, and the auto-apply A/B test readout.
+I built the first analysis in Amplitude (funnels, retention, segments, dashboards). The work then moved to Claude for the in-depth analysis: sizing the leak in dollars, a matched retention comparison, and the auto-apply A/B test readout.
 
 > **Simulated data.** All event data is simulated in Python (8,000 shoppers, 997k events, seed 42). No real Kroger data is used. Customer evidence comes from real, public Google Play reviews.
 > Independent portfolio project; not affiliated with or endorsed by The Kroger Co.
+
+**How much digital-coupon savings do grocery shoppers lose, where, and what fixes it?**
 
 ## The problem
 
