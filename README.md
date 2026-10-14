@@ -1,6 +1,7 @@
 # Kroger Coupon Savings Leak
 
 **How much digital-coupon savings do shoppers lose, where, and what fixes it?**
+
 A product-analytics case study in Amplitude and Python.
 
 > **Simulated data.** Event data is simulated in Python (8,000 shoppers, 997k events). Effects were seeded in the simulator, so the numbers show the *method*, not Kroger's real figures. Customer evidence comes from real Google Play reviews. Independent project; not affiliated with The Kroger Co.
