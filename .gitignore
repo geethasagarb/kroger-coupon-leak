@@ -1,0 +1,17 @@
+# generated simulated data (rebuild with simulator/simulate.py)
+simulator/out/
+*.jsonl
+*.jsonl.gz
+
+# secrets
+.env
+.env.*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# os
+.DS_Store

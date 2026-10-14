@@ -1,0 +1,98 @@
+{
+ "qualifying": 146377.5,
+ "applied": 78741.25,
+ "failed": 15486.0,
+ "never_clipped": 52150.25,
+ "realization": 0.8356526376393241,
+ "capture": 0.5379327423955185,
+ "share_applied": 0.5379327423955185,
+ "share_failed": 0.10579494799405646,
+ "share_never_clipped": 0.3562723096104251,
+ "never_clipped_vs_failed": 3.367573937750226,
+ "service_desk_recovered": 1131.1799999999998,
+ "service_desk_share": 0.07304533126695079,
+ "events": 997015,
+ "users": 8000,
+ "funnel_users_viewed_to_applied": 0.9931875224094657,
+ "failure_share": {
+  "eligibility_mismatch": 0.3214,
+  "identity_mismatch": 0.1305,
+  "limit_reached": 0.2879,
+  "sync_lag": 0.2602
+ },
+ "failed_in_store_share": 0.7019243187395067,
+ "fail_rate_under_15min": 0.5929388780351661,
+ "top2_leak_share": 0.6023803803433809,
+ "trust_weighted_trip_change": -0.05431199529812176,
+ "trust_failing_shoppers": 4265,
+ "trust_lost_sales": 130082.0993513955,
+ "trust_lost_sales_per_shopper": 30.499906061288513,
+ "trust_multiple_of_failed": 8.399980585780416,
+ "experiment": {
+  "Realization rate": {
+   "control": 0.8327,
+   "auto_apply": 0.8726,
+   "diff": 0.0399,
+   "ci_low": 0.0345,
+   "ci_high": 0.0452,
+   "rel_lift": 0.048,
+   "rel_ci_low": 0.0414,
+   "rel_ci_high": 0.0542
+  },
+  "Capture rate": {
+   "control": 0.6074,
+   "auto_apply": 0.8245,
+   "diff": 0.2171,
+   "ci_low": 0.209,
+   "ci_high": 0.2254,
+   "rel_lift": 0.3574,
+   "rel_ci_low": 0.3441,
+   "rel_ci_high": 0.3711
+  },
+  "Savings per order": {
+   "control": 2.2873,
+   "auto_apply": 3.1275,
+   "diff": 0.8401,
+   "ci_low": 0.7771,
+   "ci_high": 0.9046,
+   "rel_lift": 0.3673,
+   "rel_ci_low": 0.3397,
+   "rel_ci_high": 0.3955
+  },
+  "Net basket after savings": {
+   "control": 79.4016,
+   "auto_apply": 76.7947,
+   "diff": -2.6069,
+   "ci_low": -3.9767,
+   "ci_high": -1.2405,
+   "rel_lift": -0.0328,
+   "rel_ci_low": -0.0501,
+   "rel_ci_high": -0.0156
+  },
+  "Service desk adjustments": {
+   "control": 42.324,
+   "auto_apply": 38.8544,
+   "diff": -3.4695,
+   "ci_low": -7.964,
+   "ci_high": 1.3115,
+   "rel_lift": -0.082,
+   "rel_ci_low": -0.1882,
+   "rel_ci_high": 0.031
+  },
+  "Trips per shopper": {
+   "control": 0.9396,
+   "auto_apply": 0.9384,
+   "diff": -0.0012,
+   "ci_low": -0.0238,
+   "ci_high": 0.0213,
+   "rel_lift": -0.0013,
+   "rel_ci_low": -0.0253,
+   "rel_ci_high": 0.0227
+  }
+ },
+ "experiment_users": {
+  "auto_apply": 2834,
+  "control": 2766
+ },
+ "experiment_mde_pp": 0.008400815446247347
+}

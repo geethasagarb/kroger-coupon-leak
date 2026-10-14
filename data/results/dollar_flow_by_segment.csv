@@ -1,0 +1,6 @@
+segment,applied,failed,never_clipped,total_qualifying,capture_rate,realization_rate
+casual_app_user,21657.75,4775.0,21352.0,47784.75,0.4532,0.8194
+delivery_pickup_user,14568.75,2786.5,7589.25,24944.5,0.584,0.8394
+non_app_loyalist,2671.0,500.5,17958.75,21130.25,0.1264,0.8422
+power_clipper,39843.75,7424.0,5250.25,52518.0,0.7587,0.8429
+ALL,78741.25,15486.0,52150.25,146377.5,0.5379,0.8357

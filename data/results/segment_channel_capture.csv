@@ -1,0 +1,10 @@
+segment,ch,applied,lost,missed,capture_rate,leak,leak_share
+casual_app_user,delivery,1139.25,207.0,1088.0,0.468,1295.0,0.0191
+casual_app_user,in_store,18300.75,4158.0,18125.5,0.4509,22283.5,0.3295
+casual_app_user,pickup,2217.75,410.0,2138.5,0.4653,2548.5,0.0377
+delivery_pickup_user,delivery,6456.0,1230.25,3381.5,0.5833,4611.75,0.0682
+delivery_pickup_user,pickup,8112.75,1556.25,4207.75,0.5846,5764.0,0.0852
+non_app_loyalist,in_store,2671.0,500.5,17958.75,0.1264,18459.25,0.2729
+power_clipper,delivery,3395.75,477.0,417.25,0.7916,894.25,0.0132
+power_clipper,in_store,31608.75,6211.5,4186.75,0.7525,10398.25,0.1537
+power_clipper,pickup,4839.25,735.5,646.25,0.7779,1381.75,0.0204

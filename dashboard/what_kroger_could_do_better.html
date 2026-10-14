@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>What Kroger could do better</title>
+<style>
+:root{--kb:#1A4F9F;--kd:#0E3270;--bg:#F4F6FA;--fg:#1B2533;--mu:#5B6676;--ln:#E1E6EE;--red:#D0342C;--grn:#2E8B57}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--fg)}
+.wrap{width:1200px;padding:28px}
+.head{background:linear-gradient(135deg,var(--kd),var(--kb));color:#fff;border-radius:14px;padding:26px 30px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+.head h1{font-family:Georgia,serif;font-weight:400;font-size:34px;margin:6px 0 6px}
+.head .eye{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
+.head p{margin:0;font-size:15px;opacity:.95;max-width:640px;line-height:1.45}
+.big{text-align:right;white-space:nowrap}
+.big b{display:block;font-family:Georgia,serif;font-weight:400;font-size:46px;line-height:1}
+.big span{font-size:13px;opacity:.9}
+.badge{display:inline-block;background:#FFD24C;color:#3A2A00;font-weight:700;font-size:11.5px;border-radius:999px;padding:2px 10px;margin-top:10px}
+table{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:8px}
+th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);font-weight:600;padding:8px 14px 0}
+td{background:#fff;border-top:1px solid var(--ln);border-bottom:1px solid var(--ln);padding:14px;vertical-align:top;font-size:14.5px;line-height:1.4}
+td:first-child{border-left:5px solid var(--kb);border-radius:10px 0 0 10px;width:44px;text-align:center;font-family:Georgia,serif;font-size:24px;color:var(--kb)}
+td:last-child{border-right:1px solid var(--ln);border-radius:0 10px 10px 0}
+.fix{font-weight:700;font-size:15.5px}
+.who{display:block;color:var(--mu);font-size:12.5px;margin-top:3px}
+.pain{color:var(--red);font-weight:700}
+.win{color:var(--grn);font-weight:700}
+.n{font-weight:700}
+.foot{font-size:12px;color:var(--mu);margin-top:6px}
+</style></head><body><div class="wrap">
+<div class="head">
+  <div>
+    <div class="eye">Kroger Coupon Savings Leak · Recommendations</div>
+    <h1>What Kroger could do better</h1>
+    <p>Shoppers get only about half of the coupon savings they qualify for. Five fixes, ranked by where the money leaks, each tied to the evidence behind it.</p>
+    <span class="badge">Simulated event data · real Google Play reviews</span>
+  </div>
+  <div class="big"><b>54%</b><span>of qualifying savings<br>reach the receipt</span></div>
+</div>
+<table>
+<thead><tr><th></th><th>Fix</th><th>The problem today</th><th>Expected result</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><span class="fix">Apply eligible offers automatically</span><span class="who">Casual app users first</span></td>
+<td><span class="pain">36%</span> of qualifying savings is never clipped, <span class="n">3.4×</span> bigger than checkout failures. Casual app users capture only <span class="n">45%</span>.</td>
+<td>A/B test: realization <span class="win">83.3% → 87.3%</span>, capture <span class="win">61% → 82%</span>; casual users <span class="win">46% → 79%</span>.</td></tr>
+<tr><td>2</td><td><span class="fix">Auto-load top offers to the loyalty card</span><span class="who">Non-app loyalists</span></td>
+<td>They capture just <span class="pain">13%</span>. With casual in-store users they hold <span class="n">60%</span> of all leaked dollars.</td>
+<td>Reaches the biggest untapped group without asking them to open an app.</td></tr>
+<tr><td>3</td><td><span class="fix">Sync last-minute clips and warn on wrong size</span><span class="who">In-store checkout</span></td>
+<td>Clips made under 15 minutes before checkout fail <span class="pain">59%</span> of the time (vs about 12%). Wrong size is the top failure at <span class="n">32%</span>.</td>
+<td>Removes the two largest in-store failure causes at the register.</td></tr>
+<tr><td>4</td><td><span class="fix">Credit failed coupons to the next order</span><span class="who">Every failure</span></td>
+<td>A first failure cuts later trips <span class="pain">5.4%</span>, about $130k in sales, <span class="n">8×</span> the coupons' value. The service desk recovers only <span class="n">7%</span>.</td>
+<td>Protects repeat trips and takes the burden off the service desk.</td></tr>
+<tr><td>5</td><td><span class="fix">Fix clip, load and scan reliability</span><span class="who">App team</span></td>
+<td>Top real complaint: <span class="pain">37%</span> of coupon-failure reviews say the app won't clip, load or scan. Those reviews average <span class="n">1.7★</span> vs the app's 4.4★.</td>
+<td>Every other fix depends on the app working first.</td></tr>
+</tbody></table>
+<div class="foot">Independent portfolio case study by Geetha Sagar Bonthu; not affiliated with The Kroger Co. Event data is simulated (8,000 shoppers, Jul 20 – Oct 11, 2026). Reviews: 1,999 public Google Play reviews.</div>
+</div></body></html>

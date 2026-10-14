@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kroger Coupon Savings Leak</title>
+<style>
+:root {
+  color-scheme: light;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --color-bg: #F4F6FA; --color-panel: #FFFFFF; --color-fg: #1B2533; --color-fg-muted: #5B6676;
+  --color-border-line: #E1E6EE; --color-ok: #2E8B57; --color-bad: #D0342C; --color-warn: #E0A100;
+  --cds-chart-axis: #B8C0CC; --cds-chart-grid: #EDF0F5; --cds-chart-muted: #9AA5B4; --cds-chart-reference: #7A8594;
+  --cds-chart-status-critical: #D0342C;
+  --cds-border: #E1E6EE; --cds-text-secondary: #5B6676;
+  --cds-surface-popover: #FFFFFF; --cds-shadow-popover: 0 6px 24px rgba(16,32,64,.16);
+  --cds-radius: 12px;
+  --cds-font-size-caption: 12.5px; --cds-font-size-body: 15px; --cds-font-size-heading: 20px; --cds-font-size-title: 30px;
+  --cds-font-weight-medium: 600;
+  --cds-gap-xs: 6px; --cds-gap-sm: 10px; --cds-gap-md: 16px; --cds-gap-lg: 24px; --cds-gap-xl: 40px;
+  --cds-pad-xs: 6px; --cds-pad-sm: 10px; --cds-pad-md: 14px; --cds-pad-lg: 18px; --cds-pad-xl: 32px;
+  --cds-dur-slow: .6s; --cds-ease-out: cubic-bezier(.2,.7,.2,1);
+}
+body { margin: 0; padding: 24px 16px 48px; background: var(--color-bg); }
+.dash-skeleton { color: transparent; }
+</style>
+<script src="vendor/d3.min.js"></script>
+<script>
+/* Minimal data layer: loads the CSVs produced by analysis/build_results.py and runs derived calcs. */
+const dash = (() => {
+  const files = {
+    kpis: '../data/results/kpis.csv',
+    north_star_weekly: '../data/results/north_star_weekly.csv',
+    dollar_flow_by_segment: '../data/results/dollar_flow_by_segment.csv',
+    failures_by_reason_channel: '../data/results/failures_by_reason_channel.csv',
+    clip_timing_failure: '../data/results/clip_timing_failure.csv',
+    trust_loss_matched: '../data/results/trust_loss_matched.csv',
+    segment_channel_capture: '../data/results/segment_channel_capture.csv',
+    capture_by_cut: '../data/results/capture_by_cut.csv',
+    experiment_results: '../data/results/experiment_results.csv',
+    experiment_design: '../data/results/experiment_design.csv',
+    experiment_by_segment: '../data/results/experiment_by_segment.csv',
+    playstore_review_causes: '../data/playstore_review_causes.csv'
+  };
+  const store = {}, calcs = {}, listeners = [];
+  const run = () => listeners.forEach(fn => fn());
+  return {
+    colors: ['#1A4F9F', '#E07B39', '#2E9E8F', '#8A6BBE'],
+    data: (id) => store[id] || { status: 'loading' },
+    calc: (id, spec) => { calcs[id] = spec; },
+    onData: (fn) => { listeners.push(fn); },
+    load() {
+      return Promise.all(Object.entries(files).map(([id, path]) =>
+        d3.csv(path).then(d => { store[id] = { status: 'ok', data: d }; }, () => { store[id] = { status: 'error' }; })
+      )).then(() => {
+        Object.entries(calcs).forEach(([id, c]) => {
+          try { store[id] = { status: 'ok', data: c.fn(...c.inputs.map(i => store[i].data)) }; }
+          catch (e) { store[id] = { status: 'error' }; }
+        });
+        run();
+        let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(run, 150); });
+        document.documentElement.dataset.ready = '1';
+      });
+    }
+  };
+})();
+</script>
+</head>
+<body>
+<style>
+#dash-root { --dash-gutter: 0; }
+.kp { --kb: #1A4F9F; --kb-deep: #0E3270; --kb-soft: color-mix(in srgb, #1A4F9F 12%, var(--color-panel)); font-family: var(--font-sans); color: var(--color-fg); max-width: 1120px; margin-inline: auto; }
+.kp .hero { background: linear-gradient(135deg, var(--kb-deep), var(--kb)); color: #fff; border-radius: var(--cds-radius); padding: var(--cds-pad-xl); display: grid; gap: var(--cds-gap-md); }
+.kp .eyebrow { font-size: var(--cds-font-size-caption); letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.kp .hero h1 { font-family: var(--font-serif); font-weight: 400; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.1; margin: 0; }
+.kp .hero p { margin: 0; max-width: 62ch; font-size: var(--cds-font-size-body); line-height: 1.5; opacity: .95; }
+.kp .badges { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); }
+.kp .badge { font-size: var(--cds-font-size-caption); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 2px 10px; background: rgba(255,255,255,.12); }
+.kp .badge.warn { background: #FFD24C; color: #3A2A00; border-color: #FFD24C; font-weight: 600; }
+.kp .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--cds-gap-md); margin-top: var(--cds-gap-lg); }
+.kp .kpi { background: var(--color-panel); border: 1px solid var(--color-border-line); border-top: 4px solid var(--kb); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); }
+.kp .kpi.bad { border-top-color: var(--cds-chart-status-critical); }
+.kp .kpi .lab { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kp .kpi .num { font-family: var(--font-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.kp .kpi .note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.4; }
+.kp section { margin-top: var(--cds-gap-xl); }
+.kp .step { display: flex; align-items: baseline; gap: var(--cds-gap-sm); }
+.kp .step .n { flex: none; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--kb); color: #fff; display: grid; place-items: center; font-size: var(--cds-font-size-caption); font-weight: 600; transform: translateY(-2px); }
+.kp h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.kp .q { color: var(--color-fg-muted); font-size: var(--cds-font-size-body); margin: var(--cds-gap-xs) 0 0 2.3rem; }
+.kp .answer { margin: var(--cds-gap-sm) 0 0 2.3rem; padding: var(--cds-pad-md) var(--cds-pad-lg); background: var(--kb-soft); border-left: 4px solid var(--kb); border-radius: var(--cds-radius); line-height: 1.55; font-size: var(--cds-font-size-body); }
+.kp .answer b, .kp .kpi b { font-weight: 600; }
+.kp .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--cds-gap-md); margin-top: var(--cds-gap-md); }
+.kp .card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+.kp .card h3 { margin: 0; font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); }
+.kp .card .sub { margin: 2px 0 var(--cds-gap-sm); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kp .chart { position: relative; min-height: 260px; }
+.kp .chart.short { min-height: 200px; }
+.kp .legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-bottom: var(--cds-gap-xs); }
+.kp .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.kp .tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; opacity: 0; transition: opacity .12s; z-index: 2; }
+.kp .tip .t { color: var(--cds-text-secondary); margin-bottom: 2px; }
+.kp svg text { font-family: var(--font-sans); }
+.kp .tick text { fill: var(--color-fg-muted); font-size: 11px; }
+.kp .real { display: inline-block; font-size: var(--cds-font-size-caption); background: var(--color-ok); color: var(--color-bg); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+.kp table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.kp th { text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: 6px 8px; border-bottom: 1px solid var(--color-border-line); }
+.kp td { padding: 7px 8px; border-bottom: 1px solid var(--color-border-line); }
+.kp td.r, .kp th.r { text-align: right; }
+.kp .cellbar { position: relative; height: 8px; border-radius: 4px; background: var(--cds-chart-grid); min-width: 60px; }
+.kp .cellbar span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.kp .recs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: var(--cds-gap-md); margin-top: var(--cds-gap-md); }
+.kp .rec { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); }
+.kp .rec .who { font-size: var(--cds-font-size-caption); color: var(--kb); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.kp .rec p { margin: 6px 0 0; font-size: var(--cds-font-size-body); line-height: 1.45; }
+.kp footer { margin-top: var(--cds-gap-xl); padding-top: var(--cds-pad-md); border-top: 1px solid var(--color-border-line); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.5; }
+.kp [data-dash-source-state=empty] { color: transparent; }
+.kp [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+.kp .fail { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: inherit; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.kp .fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+@media (prefers-reduced-motion: no-preference) {
+  .kp .grow { animation: kpgrow var(--cds-dur-slow) var(--cds-ease-out) both; transform-origin: left center; }
+  @keyframes kpgrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+}
+</style>
+
+<div class="kp">
+  <div class="hero" id="top">
+    <div class="eyebrow">Product analytics case study · Grocery loyalty &amp; digital coupons</div>
+    <h1>Kroger Coupon Savings Leak</h1>
+    <p>Real shoppers say digital coupons don't work for them. This case study starts with their reviews, then sizes every cause with simulated shopping data: where the money leaks, what it costs Kroger in future trips, and what to fix first.</p>
+    <div class="badges">
+      <span class="badge warn">Simulated event data</span>
+      <span class="badge"><span data-source="kpis" data-field="users" data-row="0" class="dash-skeleton">—</span> synthetic shoppers</span>
+      <span class="badge"><span data-source="kpis" data-field="events" data-row="0" class="dash-skeleton">—</span> events in Amplitude</span>
+      <span class="badge">Real Google Play reviews</span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="lab">North Star · realization rate</div><div class="num" data-source="kpis" data-field="realization" data-row="0">—</div><div class="note">Savings applied ÷ (applied + failed) on clipped coupons. Weeks 1–6.</div></div>
+    <div class="kpi"><div class="lab">Capture rate</div><div class="num" data-source="kpis" data-field="capture" data-row="0">—</div><div class="note">Applied ÷ all qualifying savings, including coupons never clipped.</div></div>
+    <div class="kpi bad"><div class="lab">Never clipped</div><div class="num" data-source="kpis" data-field="never_clipped" data-row="0">—</div><div class="note">Qualifying savings shoppers didn't claim. <b data-source="leak_ratio" data-field="ratio" data-row="0">—</b> the checkout failures.</div></div>
+    <div class="kpi bad"><div class="lab">Failed at checkout</div><div class="num" data-source="kpis" data-field="failed" data-row="0">—</div><div class="note">Clipped, bought, but the discount didn't apply.</div></div>
+  </div>
+
+  <section id="voice">
+    <div class="step"><span class="n">1</span><h2>What are real shoppers saying? <span class="real">Real data</span></h2></div>
+    <p class="q">Business question: is this a real problem, and what do shoppers say goes wrong?</p>
+    <div class="answer">It's real. In Kroger app reviews on Google Play tagged <i>"Digital coupons fail to apply"</i> (<b data-source="review_total" data-field="reviews" data-row="0">—</b> reviews, about 1.7★ against the app's 4.4★), shoppers say the app won't clip or scan coupons, clipping is a chore and they want auto-apply or "clip all", and clipped coupons don't apply at the register. <b>Reviews tell us what goes wrong, not how much it costs.</b> The sections below size each cause with simulated shopping data and test the fix shoppers ask for.</div>
+    <div class="card" style="margin-top:var(--cds-gap-md)">
+      <h3>What reviewers blame when coupons fail</h3>
+      <div class="sub">Kroger (US) Google Play reviews via Amplitude AI Feedback · hand-tagged · Apr–Oct 2026</div>
+      <div class="chart short" id="voc-chart" data-source="playstore_review_causes"></div>
+    </div>
+  </section>
+
+  <section id="north-star">
+    <div class="step"><span class="n">2</span><h2>Is the North Star moving?</h2></div>
+    <p class="q">Business question: how much of the savings shoppers clip actually reaches their receipt, week by week?</p>
+    <div class="answer">Steady at about <b data-source="kpis" data-field="realization" data-row="0">—</b> for six weeks. When auto-apply switched on for half of app users in week 7, the two arms split: the auto-apply arm climbs while control stays flat. <i>(Read properly in the experiment step.)</i></div>
+    <div class="card" style="margin-top:var(--cds-gap-md)">
+      <h3>Realization rate by week and experiment arm</h3>
+      <div class="sub">App users by arm · simulated · Jul 20 – Oct 11, 2026</div>
+      <div class="legend" id="ns-legend"></div>
+      <div class="chart" id="ns-chart" data-source="north_star_weekly"></div>
+    </div>
+  </section>
+
+  <section id="leak">
+    <div class="step"><span class="n">3</span><h2>Where do the savings go?</h2></div>
+    <p class="q">Business question: of all the savings shoppers qualified for on what they bought, how much did they actually get?</p>
+    <div class="answer">Of <b data-source="kpis" data-field="qualifying" data-row="0">—</b> in qualifying savings, <b data-source="kpis" data-field="applied" data-row="0">—</b> was applied, <b data-source="kpis" data-field="failed" data-row="0">—</b> failed at checkout, and <b data-source="kpis" data-field="never_clipped" data-row="0">—</b> was never clipped. <b>The biggest leak isn't checkout failure; it's savings nobody claimed</b>, concentrated in casual app users and non-app loyalists.</div>
+    <div class="card" style="margin-top:var(--cds-gap-md)">
+      <h3>Qualifying savings by shopper segment</h3>
+      <div class="sub">Weeks 1–6 · simulated · capture rate on the right</div>
+      <div class="legend" id="flow-legend"></div>
+      <div class="chart short" id="flow-chart" data-source="dollar_flow_by_segment"></div>
+    </div>
+  </section>
+
+  <section id="failures">
+    <div class="step"><span class="n">4</span><h2>Why do clipped coupons fail?</h2></div>
+    <p class="q">Business question: when a coupon was clipped and the item bought, what stopped the discount, and what does each cause cost?</p>
+    <div class="answer">Wrong size or variant is the top cause at <b data-source="failures_by_reason_channel" data-field="share" data-where="failure_reason=eligibility_mismatch">—</b> of lost dollars. Timing is the sharpest signal: coupons clipped under 15 minutes before checkout fail <b data-source="clip_timing_failure" data-field="failure_rate" data-where="bucket=Under%2015%20min">—</b> of the time, mostly in-store. The service desk recovers only <b data-source="kpis" data-field="service_desk_share" data-row="0">—</b>.</div>
+    <div class="grid">
+      <div class="card">
+        <h3>Lost savings by failure cause and channel</h3>
+        <div class="sub">Weeks 1–6 · simulated</div>
+        <div class="legend" id="fail-legend"></div>
+        <div class="chart" id="fail-chart" data-source="failures_by_reason_channel"></div>
+      </div>
+      <div class="card">
+        <h3>Failure rate by how early the coupon was clipped</h3>
+        <div class="sub">Clipped coupons on purchased items · weeks 1–6 · simulated</div>
+        <div class="chart" id="timing-chart" data-source="clip_timing_failure"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="trust">
+    <div class="step"><span class="n">5</span><h2>Does a failed coupon cost future trips?</h2></div>
+    <p class="q">Business question: is a failure just a lost discount, or do shoppers come back less?</p>
+    <div class="answer">They come back less. Compared with similar shoppers in the same week whose coupons worked, a first failure cuts trips over the next 8 weeks by <b data-source="trust_summary" data-field="weighted_change" data-row="0">—</b> on average. That's about <b data-source="trust_summary" data-field="lost_sales" data-row="0">—</b> in lost sales, <b data-source="trust_summary" data-field="multiple" data-row="0">—</b> the face value of the coupons that failed. Power clippers barely react; everyone else does.</div>
+    <div class="card" style="margin-top:var(--cds-gap-md)">
+      <h3>Change in weekly trips after a first coupon failure</h3>
+      <div class="sub">Matched comparison, 8-week follow-up, 95% interval · simulated · left of zero = shops less</div>
+      <div class="chart short" id="trust-chart" data-source="trust_loss_matched"></div>
+    </div>
+  </section>
+
+  <section id="target">
+    <div class="step"><span class="n">6</span><h2>Who should Kroger fix it for first?</h2></div>
+    <p class="q">Business question: which shoppers lose the most, so the fix lands where the money is?</p>
+    <div class="answer">Two groups hold <b data-source="top2_leak" data-field="share" data-row="0">—</b> of all leaked dollars: <b>casual app users shopping in-store</b> and <b>non-app loyalists</b>. Age and Boost membership look like drivers, but the gaps vanish within a segment: what matters is how people shop, not who they are.</div>
+    <div class="grid">
+      <div class="card">
+        <h3>Leak by segment and channel</h3>
+        <div class="sub">Failed + never-clipped dollars · weeks 1–6 · simulated</div>
+        <div style="overflow:auto">
+          <table id="seg-table" data-source="segment_channel_capture" data-row-key="segment,ch">
+            <thead><tr><th data-field="segment">Segment</th><th data-field="ch">Channel</th><th data-field="capture_rate" class="r">Capture</th><th data-field="leak_share">Share of leak</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Capture rate by channel and age</h3>
+        <div class="sub">Realization is flat (83–85%) everywhere; capture is where gaps appear · simulated</div>
+        <div class="chart" id="cut-chart" data-source="capture_by_cut"></div>
+      </div>
+    </div>
+  </section>
+
+
+  <section id="experiment">
+    <div class="step"><span class="n">7</span><h2>Did auto-apply fix it?</h2></div>
+    <p class="q">Business question: if Kroger applies eligible coupons automatically, does more of the savings reach shoppers, without hurting the business?</p>
+    <div class="answer">Yes. App users were split at random (<b data-source="experiment_design" data-field="users_control" data-row="0">—</b> control, <b data-source="experiment_design" data-field="users_auto" data-row="0">—</b> auto-apply) for 6 weeks from Aug 31. Auto-apply raised realization from <b data-source="experiment_results" data-field="control" data-where="label=Realization%20rate">—</b> to <b data-source="experiment_results" data-field="auto_apply" data-where="label=Realization%20rate">—</b>, well above the <b data-source="experiment_design" data-field="mde_pp" data-row="0">—</b> the test was sized to detect, and capture jumped from <b data-source="experiment_results" data-field="control" data-where="label=Capture%20rate">—</b> to <b data-source="experiment_results" data-field="auto_apply" data-where="label=Capture%20rate">—</b>. The cost is <b data-source="experiment_results" data-field="diff" data-where="label=Savings%20per%20order">—</b> more savings per order. Trips didn't move in 6 weeks. One guardrail, net basket, flagged, but the simulator gives auto-apply no effect on basket size, so it's a false alarm from a noisy metric. <b>Decision: ship, starting with casual app users, and keep 10% of shoppers on manual clipping to confirm basket size holds.</b></div>
+    <div class="grid">
+      <div class="card">
+        <h3>Change vs control, with 95% interval</h3>
+        <div class="sub">Weeks 7–12 · app users · simulated · right of zero = higher than control</div>
+        <div class="chart short" id="exp-chart" data-source="experiment_results"></div>
+      </div>
+      <div class="card">
+        <h3>Who gained most</h3>
+        <div class="sub">Control → auto-apply, weeks 7–12 · simulated</div>
+        <div style="overflow:auto">
+          <table id="exp-table" data-source="experiment_by_segment" data-row-key="segment">
+            <thead><tr><th data-field="segment">Segment</th><th data-field="realization_control" class="r">Realization (ctl)</th><th data-field="realization_auto" class="r">Realization (auto)</th><th data-field="capture_control" class="r">Capture (ctl)</th><th data-field="capture_auto" class="r">Capture (auto)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="sub" style="margin-top:var(--cds-gap-sm)">Checks: arms balanced (sample-ratio p = <span data-source="experiment_design" data-field="srm_p" data-row="0">—</span>); no gap between arms before launch.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="recommendations">
+    <div class="step"><span class="n">8</span><h2>What Kroger should do</h2></div>
+    <div class="recs">
+      <div class="rec"><div class="who">Non-app loyalists</div><p>Auto-load top offers to the loyalty card. They won't open an app, and they capture the least.</p></div>
+      <div class="rec"><div class="who">Casual app users</div><p>Auto-apply eligible offers, plus a wrong-size warning at the scanner and real-time sync for last-minute clips.</p></div>
+      <div class="rec"><div class="who">Every failure</div><p>Credit a failed coupon automatically to the next order. The service desk recovers too little to protect trust.</p></div>
+      <div class="rec"><div class="who">App team</div><p>Fix clip, load and scan reliability first. It's the top real complaint, and no coupon logic helps if the app can't open the offer.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <b>About this page.</b> Independent portfolio case study by Geetha Bonthu; not affiliated with or endorsed by The Kroger Co. All behavioral event data is <b>simulated</b> (Python, seed 42) and loaded to Amplitude; it is not Kroger data. Section 1 uses real public Google Play reviews collected with Amplitude AI Feedback. Baseline = weeks 1–6 (Jul 20 – Aug 30, 2026); the auto-apply experiment runs weeks 7–12 (Aug 31 – Oct 11), app users only, randomized by shopper; intervals are user-level bootstrap. "Never clipped" dollars are valued at each coupon's face value. Open Sources to see the file behind every number.
+  </footer>
+</div>
+
+<div class="tip" id="kp-tip"></div>
+
+<script>
+(function () {
+  const N = (x) => Number(x);
+  const pct1 = d3.format('.1%'), pct0 = d3.format('.0%');
+  const usdk = (v) => '$' + d3.format(',.1f')(N(v) / 1000) + 'k';
+  const SEG = { power_clipper: 'Power clipper', casual_app_user: 'Casual app user', non_app_loyalist: 'Non-app loyalist', delivery_pickup_user: 'Delivery/pickup' };
+  const CH = { in_store: 'In-store', pickup: 'Pickup', delivery: 'Delivery' };
+  const REASON = { eligibility_mismatch: 'Wrong size / variant', limit_reached: 'Per-transaction limit', sync_lag: 'POS sync lag', identity_mismatch: 'Wrong account / card' };
+  const css = (v) => getComputedStyle(document.querySelector('.kp')).getPropertyValue(v).trim();
+
+  dash.calc('leak_ratio', { title: 'Never-clipped vs failed', description: 'Never-clipped savings divided by savings that failed at checkout.', inputs: ['kpis'],
+    fn: (kpis) => [{ ratio: Number(kpis[0].never_clipped) / Number(kpis[0].failed) }] });
+  dash.calc('top2_leak', { title: 'Two biggest leak cells', description: 'Share of leaked dollars from casual app users in-store plus non-app loyalists in-store.', inputs: ['segment_channel_capture'],
+    fn: (cells) => [{ share: cells.filter(r => (r.segment === 'casual_app_user' || r.segment === 'non_app_loyalist') && r.ch === 'in_store').reduce((s, r) => s + Number(r.leak_share), 0) }] });
+  dash.calc('trust_summary', { title: 'Trust cost summary', description: 'Trip change weighted by failing shoppers; lost sales = shoppers x 8-week spend gap; multiple = lost sales / failed coupon dollars.', inputs: ['trust_loss_matched', 'kpis'],
+    fn: (trust_loss_matched, kpis) => {
+      const n = trust_loss_matched.reduce((s, r) => s + Number(r.failing_shoppers), 0);
+      const change = trust_loss_matched.reduce((s, r) => s + Number(r.trip_change) * Number(r.failing_shoppers), 0) / n;
+      const lost = -trust_loss_matched.reduce((s, r) => s + Number(r.spend_gap_8wk_per_shopper) * Number(r.failing_shoppers), 0);
+      return [{ weighted_change: change, lost_sales: lost, multiple: lost / Number(kpis[0].failed) }];
+    } });
+  dash.calc('review_total', { title: 'Tagged reviews', description: 'Number of hand-tagged reviews in the fail-to-apply theme.', inputs: ['playstore_review_causes'],
+    fn: (playstore_review_causes) => [{ reviews: playstore_review_causes.reduce((s, r) => s + Number(r.reviews), 0) }] });
+
+  const tip = document.getElementById('kp-tip');
+  function showTip(evt, html) {
+    const host = evt.currentTarget.closest('.chart') || evt.currentTarget.closest('.card');
+    if (tip.parentNode !== host) host.appendChild(tip);
+    tip.innerHTML = html; tip.style.opacity = 1;
+    const b = host.getBoundingClientRect(), x = evt.clientX - b.left, y = evt.clientY - b.top;
+    const w = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(b.width - w, x + 12)) + 'px';
+    tip.style.top = Math.max(0, y - tip.offsetHeight - 10) + 'px';
+  }
+  const hideTip = () => { tip.style.opacity = 0; };
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function fillMarks() {
+    const fmt = { realization: pct1, capture: pct1, service_desk_share: pct0, never_clipped: usdk, failed: usdk, applied: usdk, qualifying: usdk, users: d3.format(','), events: d3.format(',') };
+    document.querySelectorAll('.kp [data-source="kpis"]').forEach(el => {
+      const d = dash.data('kpis');
+      if (d.status === 'ok' && d.data[0]) { el.textContent = fmt[el.dataset.field](d.data[0][el.dataset.field]); el.classList.remove('dash-skeleton'); }
+      else if (d.status === 'error') { el.textContent = '—'; el.classList.remove('dash-skeleton'); }
+    });
+    const one = (sel, id, f) => { const d = dash.data(id); document.querySelectorAll(sel).forEach(el => { if (d.status === 'ok' && d.data && d.data[0] !== undefined) el.textContent = f(d.data); }); };
+    one('[data-source="leak_ratio"]', 'leak_ratio', (r) => d3.format('.1f')(r[0].ratio) + '×');
+    one('[data-source="top2_leak"]', 'top2_leak', (r) => pct0(r[0].share));
+    one('[data-source="trust_summary"][data-field="weighted_change"]', 'trust_summary', (r) => pct1(Math.abs(r[0].weighted_change)));
+    one('[data-source="trust_summary"][data-field="lost_sales"]', 'trust_summary', (r) => usdk(r[0].lost_sales));
+    one('[data-source="trust_summary"][data-field="multiple"]', 'trust_summary', (r) => d3.format('.0f')(r[0].multiple) + '×');
+    one('[data-source="review_total"]', 'review_total', (r) => r[0].reviews);
+    const fr = dash.data('failures_by_reason_channel');
+    document.querySelectorAll('[data-source="failures_by_reason_channel"][data-field="share"]').forEach(el => { if (fr.status === 'ok') { const r = fr.data.find(x => x.failure_reason === 'eligibility_mismatch'); if (r) el.textContent = pct0(r.share); } });
+    const ct = dash.data('clip_timing_failure');
+    document.querySelectorAll('b[data-source="clip_timing_failure"]').forEach(el => { if (ct.status === 'ok') { const r = ct.data.find(x => x.bucket === 'Under 15 min'); if (r) el.textContent = pct0(r.failure_rate); } });
+  }
+
+  function failBox(el, id) { const s = dash.data(id).status; if (s === 'error' || s === 'connect') { el.innerHTML = '<div class="fail">Failed to load</div>'; return true; } if (s !== 'ok') { el.innerHTML = ''; el.classList.add('dash-skeleton'); return true; } el.classList.remove('dash-skeleton'); return false; }
+  const svgFor = (el, h) => d3.select(el).html('').append('svg').attr('width', '100%').attr('viewBox', `0 0 ${Math.max(280, el.clientWidth)} ${h}`).attr('height', h);
+  const legend = (id, items) => { const el = document.getElementById(id); el.innerHTML = ''; items.forEach(([c, t]) => { const s = document.createElement('span'); const i = document.createElement('i'); i.style.background = c; s.appendChild(i); s.appendChild(document.createTextNode(t)); el.appendChild(s); }); };
+  const cleanAxis = (g) => { g.attr('font-size', null).attr('font-family', null); g.select('.domain').attr('stroke', css('--cds-chart-axis')); g.selectAll('.tick line').attr('stroke', css('--cds-chart-grid')); };
+
+  function drawNorthStar() {
+    const el = document.getElementById('ns-chart'); if (failBox(el, 'north_star_weekly')) return;
+    const rows = dash.data('north_star_weekly').data.map(r => ({ w: N(r.week), lab: r.week_start, c: N(r.control), a: N(r.auto_apply) }));
+    const blue = css('--kb'), muted = css('--cds-chart-muted');
+    legend('ns-legend', [[blue, 'Auto-apply arm'], [muted, 'Control arm']]);
+    const W = Math.max(280, el.clientWidth), H = 260, m = { t: 16, r: 64, b: 28, l: 44 };
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([1, d3.max(rows, r => r.w)], [m.l, W - m.r]);
+    const lo = d3.min(rows, r => Math.min(r.c, r.a)), hi = d3.max(rows, r => Math.max(r.c, r.a));
+    const y = d3.scaleLinear([lo - 0.01, hi + 0.01], [H - m.b, m.t]).nice();
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.min(12, Math.floor(W / 60))).tickFormat(w => (rows.find(r => r.w === w) || {}).lab || '')).call(cleanAxis);
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(pct0).tickSize(-(W - m.l - m.r))).call(cleanAxis).call(g => g.select('.domain').remove());
+    const x7 = x(6.5);
+    svg.append('rect').attr('x', x7).attr('y', m.t).attr('width', W - m.r - x7).attr('height', H - m.b - m.t).attr('fill', css('--kb')).attr('opacity', .06);
+    svg.append('line').attr('x1', x7).attr('x2', x7).attr('y1', m.t).attr('y2', H - m.b).attr('stroke', css('--cds-chart-reference')).attr('stroke-dasharray', '4 4');
+    svg.append('text').attr('x', x7 + 6).attr('y', m.t + 12).attr('fill', css('--color-fg-muted')).attr('font-size', 11).text('Auto-apply starts');
+    [['c', muted], ['a', blue]].forEach(([k, c]) => {
+      svg.append('path').datum(rows).attr('fill', 'none').attr('stroke', c).attr('stroke-width', k === 'a' ? 2.5 : 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round').attr('d', d3.line().x(r => x(r.w)).y(r => y(r[k])));
+      const last = rows[rows.length - 1];
+      svg.append('text').attr('x', x(last.w) + 6).attr('y', y(last[k]) + 4).attr('fill', c).attr('font-size', 12).attr('font-weight', 600).text(pct1(last[k]));
+    });
+    const dot = svg.append('g').style('display', 'none');
+    const dA = dot.append('circle').attr('r', 4).attr('fill', blue), dC = dot.append('circle').attr('r', 4).attr('fill', muted);
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', W - m.l - m.r).attr('height', H - m.t - m.b).attr('fill', 'transparent')
+      .on('mousemove', function (e) { const [px] = d3.pointer(e); const w = Math.round(x.invert(px)); const r = rows.find(z => z.w === w); if (!r) return; dot.style('display', null); dA.attr('cx', x(r.w)).attr('cy', y(r.a)); dC.attr('cx', x(r.w)).attr('cy', y(r.c));
+        showTip(e, `<div class="t">Week ${r.w} · ${esc(r.lab)}</div><div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${blue};margin-right:6px"></i>Auto-apply ${pct1(r.a)}</div><div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${muted};margin-right:6px"></i>Control ${pct1(r.c)}</div>`); })
+      .on('mouseleave', () => { dot.style('display', 'none'); hideTip(); });
+  }
+
+  function drawFlow() {
+    const el = document.getElementById('flow-chart'); if (failBox(el, 'dollar_flow_by_segment')) return;
+    const rows = dash.data('dollar_flow_by_segment').data.filter(r => r.segment !== 'ALL').map(r => ({ s: r.segment, a: N(r.applied), f: N(r.failed), n: N(r.never_clipped), cap: N(r.capture_rate) })).sort((p, q) => (q.a + q.f + q.n) - (p.a + p.f + p.n));
+    const cA = css('--kb'), cF = css('--cds-chart-status-critical'), cN = css('--cds-chart-muted');
+    legend('flow-legend', [[cA, 'Applied'], [cF, 'Failed at checkout'], [cN, 'Never clipped']]);
+    const W = Math.max(280, el.clientWidth), bh = 26, gap = 18, m = { t: 6, r: 56, b: 24, l: Math.min(140, W * .32) };
+    const H = m.t + rows.length * (bh + gap) + m.b;
+    el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([0, d3.max(rows, r => r.a + r.f + r.n)], [m.l, W - m.r]);
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.floor(W / 110)).tickFormat(v => '$' + v / 1000 + 'k')).call(cleanAxis);
+    rows.forEach((r, i) => {
+      const yy = m.t + i * (bh + gap);
+      svg.append('text').attr('x', m.l - 8).attr('y', yy + bh / 2 + 4).attr('text-anchor', 'end').attr('fill', css('--color-fg')).attr('font-size', 12).text(SEG[r.s] || r.s);
+      let x0 = m.l;
+      [['a', cA, 'Applied'], ['f', cF, 'Failed at checkout'], ['n', cN, 'Never clipped']].forEach(([k, c, lab]) => {
+        const w = x(r[k]) - x(0);
+        svg.append('rect').attr('class', 'grow').attr('x', x0).attr('y', yy).attr('width', Math.max(0, w - 1)).attr('height', bh).attr('rx', 4).attr('fill', c)
+          .on('mousemove', (e) => showTip(e, `<div class="t">${esc(SEG[r.s] || r.s)}</div><div>${lab}: ${usdk(r[k])}</div><div>Capture rate: ${pct1(r.cap)}</div>`)).on('mouseleave', hideTip);
+        x0 += w;
+      });
+      svg.append('text').attr('x', x0 + 6).attr('y', yy + bh / 2 + 4).attr('fill', r.cap < .5 ? cF : css('--color-fg-muted')).attr('font-size', 12).attr('font-weight', 600).text(pct0(r.cap));
+    });
+  }
+
+  function drawFailures() {
+    const el = document.getElementById('fail-chart'); if (failBox(el, 'failures_by_reason_channel')) return;
+    const rows = dash.data('failures_by_reason_channel').data.map(r => ({ k: r.failure_reason, in_store: N(r.in_store), pickup: N(r.pickup), delivery: N(r.delivery), total: N(r.total) })).sort((a, b) => b.total - a.total);
+    const cols = { in_store: css('--kb'), pickup: dash.colors[1], delivery: dash.colors[2] };
+    legend('fail-legend', [[cols.in_store, 'In-store'], [cols.pickup, 'Pickup'], [cols.delivery, 'Delivery']]);
+    const W = Math.max(280, el.clientWidth), bh = 24, gap = 22, m = { t: 6, r: 52, b: 24, l: Math.min(150, W * .38) };
+    const H = m.t + rows.length * (bh + gap) + m.b; el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([0, d3.max(rows, r => r.total)], [m.l, W - m.r]);
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.floor(W / 100)).tickFormat(v => '$' + d3.format('.1f')(v / 1000) + 'k')).call(cleanAxis);
+    rows.forEach((r, i) => {
+      const yy = m.t + i * (bh + gap);
+      svg.append('text').attr('x', m.l - 8).attr('y', yy + bh / 2 + 4).attr('text-anchor', 'end').attr('fill', css('--color-fg')).attr('font-size', 12).text(REASON[r.k] || r.k);
+      let x0 = m.l;
+      ['in_store', 'pickup', 'delivery'].forEach(c => { const w = x(r[c]) - x(0);
+        svg.append('rect').attr('class', 'grow').attr('x', x0).attr('y', yy).attr('width', Math.max(0, w - 1)).attr('height', bh).attr('rx', 4).attr('fill', cols[c])
+          .on('mousemove', (e) => showTip(e, `<div class="t">${esc(REASON[r.k] || r.k)}</div><div>${CH[c]}: ${usdk(r[c])}</div><div>Total: ${usdk(r.total)}</div>`)).on('mouseleave', hideTip);
+        x0 += w; });
+      svg.append('text').attr('x', x0 + 6).attr('y', yy + bh / 2 + 4).attr('fill', css('--color-fg-muted')).attr('font-size', 12).text(usdk(r.total));
+    });
+  }
+
+  function drawTiming() {
+    const el = document.getElementById('timing-chart'); if (failBox(el, 'clip_timing_failure')) return;
+    const rows = dash.data('clip_timing_failure').data.map(r => ({ b: r.bucket, n: N(r.coupons), f: N(r.failure_rate) }));
+    const W = Math.max(280, el.clientWidth), H = 260, m = { t: 22, r: 12, b: 28, l: 40 };
+    const svg = svgFor(el, H);
+    const x = d3.scaleBand(rows.map(r => r.b), [m.l, W - m.r]).padding(.35);
+    const y = d3.scaleLinear([0, Math.max(.7, d3.max(rows, r => r.f))], [H - m.b, m.t]);
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(pct0).tickSize(-(W - m.l - m.r))).call(cleanAxis).call(g => g.select('.domain').remove());
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x)).call(cleanAxis);
+    rows.forEach((r, i) => {
+      const c = i === 0 ? css('--cds-chart-status-critical') : css('--kb');
+      svg.append('rect').attr('x', x(r.b) + Math.max(0, (x.bandwidth() - 32) / 2)).attr('width', Math.min(32, x.bandwidth())).attr('y', y(r.f)).attr('height', y(0) - y(r.f)).attr('rx', 4).attr('fill', c)
+        .on('mousemove', (e) => showTip(e, `<div class="t">Clipped ${esc(r.b.toLowerCase())} before checkout</div><div>Failure rate: ${pct1(r.f)}</div><div>${d3.format(',')(r.n)} coupons</div>`)).on('mouseleave', hideTip);
+      svg.append('text').attr('x', x(r.b) + x.bandwidth() / 2).attr('y', y(r.f) - 6).attr('text-anchor', 'middle').attr('font-size', 12).attr('font-weight', 600).attr('fill', c).text(pct0(r.f));
+    });
+  }
+
+  function drawTrust() {
+    const el = document.getElementById('trust-chart'); if (failBox(el, 'trust_loss_matched')) return;
+    const rows = dash.data('trust_loss_matched').data.map(r => ({ s: r.segment, v: N(r.trip_change), lo: N(r.ci_low), hi: N(r.ci_high), n: N(r.failing_shoppers) }));
+    const W = Math.max(280, el.clientWidth), rh = 38, m = { t: 8, r: 56, b: 26, l: Math.min(140, W * .32) };
+    const H = m.t + rows.length * rh + m.b; el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([Math.min(-.15, d3.min(rows, r => r.lo)), .03], [m.l, W - m.r]);
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(5).tickFormat(pct0)).call(cleanAxis);
+    svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke', css('--cds-chart-reference')).attr('stroke-dasharray', '4 4');
+    rows.forEach((r, i) => {
+      const yy = m.t + i * rh + rh / 2, sig = r.hi < 0;
+      const c = sig ? css('--cds-chart-status-critical') : css('--cds-chart-muted');
+      svg.append('text').attr('x', m.l - 8).attr('y', yy + 4).attr('text-anchor', 'end').attr('fill', css('--color-fg')).attr('font-size', 12).text(r.s);
+      svg.append('line').attr('x1', x(r.lo)).attr('x2', x(r.hi)).attr('y1', yy).attr('y2', yy).attr('stroke', c).attr('stroke-width', 6).attr('stroke-linecap', 'round').attr('opacity', .35);
+      svg.append('circle').attr('cx', x(r.v)).attr('cy', yy).attr('r', 6).attr('fill', c)
+        .on('mousemove', (e) => showTip(e, `<div class="t">${esc(r.s)}</div><div>Trips: ${pct1(r.v)}</div><div>95% CI ${pct1(r.lo)} to ${pct1(r.hi)}</div><div>${d3.format(',')(r.n)} failing shoppers</div>`)).on('mouseleave', hideTip);
+      svg.append('text').attr('x', Math.max(x(r.hi), x(0)) + 8).attr('y', yy + 4).attr('font-size', 12).attr('font-weight', 600).attr('fill', c).text(pct1(r.v));
+    });
+  }
+
+  function drawSegTable() {
+    const t = document.getElementById('seg-table'), tb = t.querySelector('tbody');
+    const d = dash.data('segment_channel_capture');
+    if (d.status !== 'ok') { tb.innerHTML = d.status === 'error' ? '<tr><td colspan="4"><div class="fail">Failed to load</div></td></tr>' : ''; return; }
+    const rows = d.data.slice().sort((a, b) => N(b.leak_share) - N(a.leak_share));
+    const mx = d3.max(rows, r => N(r.leak_share)); tb.innerHTML = '';
+    rows.forEach((r, i) => {
+      const tr = document.createElement('tr'); tr.dataset.key = encodeURIComponent(r.segment) + ',' + encodeURIComponent(r.ch);
+      const td = (txt, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = txt; tr.appendChild(c); return c; };
+      td(SEG[r.segment] || r.segment); td(CH[r.ch] || r.ch); td(pct0(r.capture_rate), 'r');
+      const c = document.createElement('td'); const wrap = document.createElement('div'); wrap.style.display = 'flex'; wrap.style.alignItems = 'center'; wrap.style.gap = '8px';
+      const bar = document.createElement('div'); bar.className = 'cellbar'; bar.style.flex = '1'; const s = document.createElement('span'); s.style.width = (N(r.leak_share) / mx * 100) + '%'; s.style.background = i < 2 ? css('--cds-chart-status-critical') : css('--kb'); bar.appendChild(s);
+      const lab = document.createElement('span'); lab.textContent = pct0(r.leak_share); lab.style.minWidth = '2.5em'; lab.style.textAlign = 'right';
+      wrap.appendChild(bar); wrap.appendChild(lab); c.appendChild(wrap); tr.appendChild(c); tb.appendChild(tr);
+    });
+  }
+
+  function drawCuts() {
+    const el = document.getElementById('cut-chart'); if (failBox(el, 'capture_by_cut')) return;
+    const rows = dash.data('capture_by_cut').data.filter(r => r.dimension !== 'Boost member').map(r => ({ d: r.dimension, v: r.value, c: N(r.capture_rate), z: N(r.realization_rate) }));
+    const W = Math.max(280, el.clientWidth), bh = 16, gap = 10, sep = 18, m = { t: 6, r: 48, b: 24, l: 96 };
+    const groups = d3.groups(rows, r => r.d);
+    const H = m.t + rows.length * (bh + gap) + groups.length * sep + m.b; el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([0, 1], [m.l, W - m.r]);
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(5).tickFormat(pct0)).call(cleanAxis);
+    let yy = m.t;
+    groups.forEach(([g, rs]) => {
+      svg.append('text').attr('x', 0).attr('y', yy + 11).attr('font-size', 11).attr('fill', css('--color-fg-muted')).attr('font-weight', 600).text(g.toUpperCase());
+      yy += sep;
+      const mn = d3.min(rs, r => r.c);
+      rs.forEach(r => {
+        const c = r.c === mn ? css('--cds-chart-status-critical') : css('--kb');
+        svg.append('text').attr('x', m.l - 8).attr('y', yy + bh / 2 + 4).attr('text-anchor', 'end').attr('font-size', 12).attr('fill', css('--color-fg')).text(r.v);
+        svg.append('rect').attr('x', m.l).attr('y', yy).attr('width', x(1) - x(0)).attr('height', bh).attr('rx', 4).attr('fill', css('--cds-chart-grid'));
+        svg.append('rect').attr('class', 'grow').attr('x', m.l).attr('y', yy).attr('width', x(r.c) - x(0)).attr('height', bh).attr('rx', 4).attr('fill', c)
+          .on('mousemove', (e) => showTip(e, `<div class="t">${esc(g)} · ${esc(r.v)}</div><div>Capture: ${pct1(r.c)}</div><div>Realization: ${pct1(r.z)}</div>`)).on('mouseleave', hideTip);
+        svg.append('text').attr('x', x(r.c) + 6).attr('y', yy + bh / 2 + 4).attr('font-size', 12).attr('font-weight', 600).attr('fill', c).text(pct0(r.c));
+        yy += bh + gap;
+      });
+    });
+  }
+
+  function drawVoc() {
+    const el = document.getElementById('voc-chart'); if (failBox(el, 'playstore_review_causes')) return;
+    const rows = dash.data('playstore_review_causes').data.filter(r => r.hypothesis).map(r => ({ c: r.cause, h: r.hypothesis, n: N(r.reviews), s: N(r.share) })).sort((a, b) => b.n - a.n);
+    const W = Math.max(280, el.clientWidth), bh = 22, gap = 12, m = { t: 6, r: 40, b: 8, l: Math.min(280, W * .5) };
+    const H = m.t + rows.length * (bh + gap) + m.b; el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([0, d3.max(rows, r => r.n)], [m.l, W - m.r]);
+    rows.forEach((r, i) => {
+      const yy = m.t + i * (bh + gap), isNew = r.h.startsWith('New');
+      const c = isNew ? css('--cds-chart-muted') : css('--kb');
+      svg.append('text').attr('x', m.l - 8).attr('y', yy + bh / 2 + 4).attr('text-anchor', 'end').attr('font-size', 12).attr('fill', css('--color-fg')).text(r.c.length > 46 && W < 600 ? r.c.slice(0, 44) + '…' : r.c);
+      svg.append('rect').attr('class', 'grow').attr('x', m.l).attr('y', yy).attr('width', x(r.n) - x(0)).attr('height', bh).attr('rx', 4).attr('fill', c)
+        .on('mousemove', (e) => showTip(e, `<div class="t">${esc(r.c)}</div><div>${r.n} reviews · ${pct0(r.s)}</div><div>${esc(isNew ? 'Not in our hypotheses' : 'Matches ' + r.h)}</div>`)).on('mouseleave', hideTip);
+      svg.append('text').attr('x', x(r.n) + 6).attr('y', yy + bh / 2 + 4).attr('font-size', 12).attr('font-weight', 600).attr('fill', c).text(isNew ? r.n : r.n + ' · ' + r.h);
+    });
+  }
+
+
+  function fillExp() {
+    const r = dash.data('experiment_results'), d = dash.data('experiment_design');
+    document.querySelectorAll('#experiment [data-source="experiment_results"][data-where]').forEach(el => {
+      if (r.status !== 'ok') return;
+      const lab = decodeURIComponent(el.dataset.where.split('=')[1]);
+      const row = r.data.find(x => x.label === lab); if (!row) return;
+      const v = Number(row[el.dataset.field]);
+      el.textContent = lab === 'Savings per order' ? '$' + d3.format('.2f')(v) : pct1(v);
+    });
+    document.querySelectorAll('#experiment [data-source="experiment_design"]').forEach(el => {
+      if (d.status !== 'ok' || !d.data[0]) return;
+      const f = el.dataset.field, v = d.data[0][f];
+      el.textContent = f === 'mde_pp' ? d3.format('.2f')(Number(v) * 100) + ' points' : f === 'srm_p' ? d3.format('.2f')(Number(v)) : d3.format(',')(Number(v));
+    });
+  }
+  function drawExp() {
+    const el = document.getElementById('exp-chart'); if (failBox(el, 'experiment_results')) return;
+    const rows = dash.data('experiment_results').data.map(r => ({ l: r.label, role: r.role, v: N(r.rel_lift), lo: N(r.rel_ci_low), hi: N(r.rel_ci_high), c: N(r.control), a: N(r.auto_apply), verdict: r.verdict }));
+    const W = Math.max(280, el.clientWidth), rh = 34, m = { t: 6, r: 58, b: 26, l: Math.min(250, W * .45) };
+    const H = m.t + rows.length * rh + m.b; el.style.minHeight = H + 'px';
+    const svg = svgFor(el, H);
+    const x = d3.scaleLinear([Math.min(-.25, d3.min(rows, r => r.lo)), Math.max(.4, d3.max(rows, r => r.hi))], [m.l, W - m.r]).nice();
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(5).tickFormat(pct0)).call(cleanAxis);
+    svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke', css('--cds-chart-reference')).attr('stroke-dasharray', '4 4');
+    rows.forEach((r, i) => {
+      const yy = m.t + i * rh + rh / 2;
+      const col = r.verdict.startsWith('Win') ? css('--kb') : r.verdict.startsWith('Flag') ? css('--color-warn') : r.verdict.startsWith('Expected') ? css('--cds-chart-status-critical') : css('--cds-chart-muted');
+      svg.append('text').attr('x', m.l - 8).attr('y', yy + 4).attr('text-anchor', 'end').attr('font-size', 12).attr('fill', css('--color-fg')).attr('font-weight', r.role === 'primary' ? 600 : 400).text(r.l + (r.role === 'guardrail' ? ' (guardrail)' : ''));
+      svg.append('line').attr('x1', x(r.lo)).attr('x2', x(r.hi)).attr('y1', yy).attr('y2', yy).attr('stroke', col).attr('stroke-width', 6).attr('stroke-linecap', 'round').attr('opacity', .35);
+      svg.append('circle').attr('cx', x(r.v)).attr('cy', yy).attr('r', r.role === 'primary' ? 7 : 5.5).attr('fill', col)
+        .on('mousemove', (e) => showTip(e, `<div class="t">${esc(r.l)}</div><div>Change: ${d3.format('+.1%')(r.v)}</div><div>95% interval ${d3.format('+.1%')(r.lo)} to ${d3.format('+.1%')(r.hi)}</div><div>${esc(r.verdict)}</div>`)).on('mouseleave', hideTip);
+      svg.append('text').attr('x', Math.max(x(r.hi), x(0)) + 8).attr('y', yy + 4).attr('font-size', 12).attr('font-weight', 600).attr('fill', col).text(d3.format('+.1%')(r.v));
+    });
+  }
+  function drawExpTable() {
+    const tb = document.querySelector('#exp-table tbody'); const d = dash.data('experiment_by_segment');
+    if (d.status !== 'ok') { tb.innerHTML = d.status === 'error' ? '<tr><td colspan="5"><div class="fail">Failed to load</div></td></tr>' : ''; return; }
+    tb.innerHTML = '';
+    d.data.forEach(r => {
+      const tr = document.createElement('tr');
+      const td = (t, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = t; tr.appendChild(c); };
+      td(r.segment); td(pct1(r.realization_control), 'r'); td(pct1(r.realization_auto), 'r'); td(pct1(r.capture_control), 'r'); td(pct1(r.capture_auto), 'r');
+      tb.appendChild(tr);
+    });
+  }
+
+  dash.onData(() => {
+    fillMarks(); fillExp();
+    [drawNorthStar, drawFlow, drawFailures, drawTiming, drawTrust, drawSegTable, drawCuts, drawVoc, drawExp, drawExpTable].forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+  });
+})();
+</script>
+
+<script>dash.load();</script>
+</body>
+</html>

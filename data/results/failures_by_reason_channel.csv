@@ -1,0 +1,5 @@
+failure_reason,delivery,in_store,pickup,total,coupons,share
+eligibility_mismatch,690.75,3229.5,1056.25,4976.5,4552,0.3214
+limit_reached,575.25,3120.25,763.0,4458.5,4064,0.2879
+sync_lag,190.75,3552.0,286.75,4029.5,3695,0.2602
+identity_mismatch,457.5,968.25,595.75,2021.5,1865,0.1305

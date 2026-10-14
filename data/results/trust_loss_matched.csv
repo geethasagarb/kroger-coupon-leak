@@ -1,0 +1,5 @@
+segment,failing_shoppers,clean_shoppers,trips_per_week_failed,trips_per_week_clean,trip_change,ci_low,ci_high,spend_gap_8wk_per_shopper
+Non-app loyalist,305,1278,0.8,0.8798,-0.0907,-0.137,-0.0491,-46.8309
+Casual app user,1692,2781,0.892,0.9567,-0.0676,-0.088,-0.0488,-36.7598
+Delivery/pickup,836,868,0.714,0.7635,-0.0649,-0.0994,-0.0273,-32.5262
+Power clipper,1432,920,1.1322,1.1609,-0.0247,-0.0502,0.0026,-18.4421

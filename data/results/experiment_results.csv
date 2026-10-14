@@ -1,0 +1,7 @@
+label,metric,role,control,auto_apply,diff,ci_low,ci_high,rel_lift,rel_ci_low,rel_ci_high,verdict
+Realization rate,Realization rate (primary),primary,0.8327,0.8726,0.0399,0.0345,0.0452,0.048,0.0414,0.0542,Win
+Capture rate,Capture rate,secondary,0.6074,0.8245,0.2171,0.209,0.2254,0.3574,0.3441,0.3711,Win
+Savings per order,Savings applied per order ($),secondary,2.2873,3.1275,0.8401,0.7771,0.9046,0.3673,0.3397,0.3955,Expected cost
+Net basket after savings,Net basket after savings ($),guardrail,79.4016,76.7947,-2.6069,-3.9767,-1.2405,-0.0328,-0.0501,-0.0156,Flag: false alarm (no basket effect in simulator)
+Service desk adjustments,"Service desk adjustments per 1,000 orders",guardrail,42.324,38.8544,-3.4695,-7.964,1.3115,-0.082,-0.1882,0.031,No significant change
+Trips per shopper,Trips per shopper per week,guardrail,0.9396,0.9384,-0.0012,-0.0238,0.0213,-0.0013,-0.0253,0.0227,No significant change
