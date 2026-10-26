@@ -90,4 +90,4 @@ To load into your own Amplitude project, set `AMPLITUDE_API_KEY` as an environme
 
 ## Author
 
-**Geetha Sagar Bonthu** · Analytics Engineer · [LinkedIn](https://www.linkedin.com/in/gitageetha) · [Portfolio](https://geethsabarb.in)
+**Geetha Sagar Bonthu** · Analytics Engineer · [LinkedIn](https://www.linkedin.com/in/gitageetha) · [Portfolio](https://geethasagarb.in)
